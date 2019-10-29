@@ -1,6 +1,7 @@
 package writer
 
 import (
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"time"
@@ -9,12 +10,13 @@ import (
 	"github.com/golang/snappy"
 	"github.com/prometheus/common/log"
 	"github.com/prometheus/common/model"
-	"github.com/prometheus/prometheus/storage/remote"
+	"github.com/prometheus/prometheus/prompb"
 	"github.com/yuriadams/prometheus-elasticsearch-adapter/config"
 )
 
 // Handle receives the payload from Prometheus, format and send to Elasticsearch
 func Handle(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("Handle()")
 	compressed, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -27,7 +29,7 @@ func Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req remote.WriteRequest
+	var req prompb.WriteRequest
 	if err := proto.Unmarshal(reqBuf, &req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -42,7 +44,7 @@ func Handle(w http.ResponseWriter, r *http.Request) {
 	}(writer)
 }
 
-func protoToSamples(req *remote.WriteRequest) model.Samples {
+func protoToSamples(req *prompb.WriteRequest) model.Samples {
 	var samples model.Samples
 	for _, ts := range req.Timeseries {
 		metric := make(model.Metric, len(ts.Labels))
@@ -54,7 +56,7 @@ func protoToSamples(req *remote.WriteRequest) model.Samples {
 			samples = append(samples, &model.Sample{
 				Metric:    metric,
 				Value:     model.SampleValue(s.Value),
-				Timestamp: model.Time(s.TimestampMs),
+				Timestamp: model.Time(s.Timestamp),
 			})
 
 		}

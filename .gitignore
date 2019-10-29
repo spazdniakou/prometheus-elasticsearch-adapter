@@ -19,3 +19,5 @@ vendor/
 .DS_Store
 
 Gopkg.lock
+
+prometheus-elasticsearch-adapter

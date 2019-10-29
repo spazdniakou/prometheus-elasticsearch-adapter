@@ -11,7 +11,7 @@ import (
 	"github.com/golang/snappy"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/log"
-	"github.com/prometheus/prometheus/storage/remote"
+	"github.com/prometheus/prometheus/prompb"
 	"github.com/yuriadams/prometheus-elasticsearch-adapter/config"
 )
 
@@ -36,7 +36,7 @@ func Handle(w http.ResponseWriter, r *http.Request) {
 
 	prometheus.NewTimer(config.ReadDuration)
 
-	var req remote.ReadRequest
+	var req prompb.ReadRequest
 	if err1 := proto.Unmarshal(reqBuf, &req); err1 != nil {
 		log.With("err", err).Error("Failed to unmarshal body.")
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -58,8 +58,8 @@ func Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := remote.ReadResponse{
-		Results: []*remote.QueryResult{
+	resp := prompb.ReadResponse{
+		Results: []*prompb.QueryResult{
 			{Timeseries: responseToTimeseries(datapoints)},
 		},
 	}
@@ -83,28 +83,28 @@ func Handle(w http.ResponseWriter, r *http.Request) {
 }
 
 // responseToTimeseries parses structure from elasticsearch to prometheus strutcs
-func responseToTimeseries(dataPoints []map[string]interface{}) []*remote.TimeSeries {
-	labelsToSeries := map[string]*remote.TimeSeries{}
+func responseToTimeseries(dataPoints []map[string]interface{}) []*prompb.TimeSeries {
+	labelsToSeries := map[string]*prompb.TimeSeries{}
 
 	for _, datapoint := range dataPoints {
 		key := buildKey(datapoint)
 		ts, ok := labelsToSeries[key]
 
 		if !ok {
-			labelPairs := make([]*remote.LabelPair, 0, len(dataPoints)+1)
+			labelPairs := make([]prompb.Label, 0, len(dataPoints)+1)
 
 			for k, v := range datapoint {
 				if k != "value" && k != "timestamp" {
-					labelPairs = append(labelPairs, &remote.LabelPair{
+					labelPairs = append(labelPairs, prompb.Label{
 						Name:  k,
 						Value: v.(string),
 					})
 				}
 			}
 
-			ts = &remote.TimeSeries{
+			ts = &prompb.TimeSeries{
 				Labels:  labelPairs,
-				Samples: make([]*remote.Sample, 0, 100),
+				Samples: make([]prompb.Sample, 0, 100),
 			}
 
 			labelsToSeries[key] = ts
@@ -113,14 +113,14 @@ func responseToTimeseries(dataPoints []map[string]interface{}) []*remote.TimeSer
 		t, _ := time.Parse(time.RFC3339, datapoint["timestamp"].(string))
 		timeInMillis := (t.UTC().UnixNano() / int64(time.Millisecond))
 
-		ts.Samples = append(ts.Samples, &remote.Sample{
-			TimestampMs: timeInMillis,
-			Value:       datapoint["value"].(float64),
+		ts.Samples = append(ts.Samples, prompb.Sample{
+			Timestamp: timeInMillis,
+			Value:     datapoint["value"].(float64),
 		})
 
 	}
 
-	resp := make([]*remote.TimeSeries, 0, len(labelsToSeries))
+	resp := make([]*prompb.TimeSeries, 0, len(labelsToSeries))
 
 	for _, ts := range labelsToSeries {
 		resp = append(resp, ts)

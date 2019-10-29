@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/prometheus/common/model"
-	"github.com/prometheus/prometheus/storage/remote"
+	"github.com/prometheus/prometheus/prompb"
 	"github.com/yuriadams/prometheus-elasticsearch-adapter/elasticsearch"
 )
 
@@ -18,7 +18,7 @@ type Writer interface {
 
 // Reader represents the interface that each client must implement read function
 type Reader interface {
-	Read(req *remote.ReadRequest) ([]map[string]interface{}, error)
+	Read(req *prompb.ReadRequest) ([]map[string]interface{}, error)
 	Name() string
 }
 

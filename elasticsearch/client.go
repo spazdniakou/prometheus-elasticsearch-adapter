@@ -6,14 +6,16 @@ import (
 	"fmt"
 	"math"
 	"net/http"
-	"os"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	v4 "github.com/aws/aws-sdk-go/aws/signer/v4"
 	elastic "github.com/olivere/elastic"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/log"
 	"github.com/prometheus/common/model"
-	"github.com/prometheus/prometheus/storage/remote"
+	"github.com/prometheus/prometheus/prompb"
+	"github.com/sha1sum/aws_signing_client"
 	awsauth "github.com/smartystreets/go-aws-auth"
 )
 
@@ -73,22 +75,14 @@ func NewClient(url string, maxRetries int, esIndexPerfix, esType string, timeout
 	var client *elastic.Client
 	var err error
 	if awsService {
-		signingTransport := awsSigningTransport{
-			Credentials: awsauth.Credentials{
-				AccessKeyID:     os.Getenv("AWS_ACCESS_KEY"),
-				SecretAccessKey: os.Getenv("AWS_SECRET_KEY"),
-			},
-			HTTPClient: http.DefaultClient,
-		}
-
-		signingClient := &http.Client{
-			Transport: http.RoundTripper(signingTransport),
-		}
+		creds := credentials.NewEnvCredentials()
+		signer := v4.NewSigner(creds)
+		awsClient, err := aws_signing_client.New(signer, nil, "es", "us-east-1")
 
 		client, err = elastic.NewClient(
 			elastic.SetURL(url),
 			elastic.SetScheme("https"),
-			elastic.SetHttpClient(signingClient),
+			elastic.SetHttpClient(awsClient),
 			elastic.SetSniff(false),
 		)
 
@@ -188,7 +182,7 @@ func (c *Client) Write(samples model.Samples) error {
 }
 
 // Read queries metrics from Elasticsearch.
-func (c *Client) Read(req *remote.ReadRequest) ([]map[string]interface{}, error) {
+func (c *Client) Read(req *prompb.ReadRequest) ([]map[string]interface{}, error) {
 	ctx := context.Background()
 	querier := req.Queries[0]
 	query := elastic.NewBoolQuery()
